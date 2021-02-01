@@ -1,0 +1,16 @@
+com\mycorp\Zendesk$1.class
+com\mycorp\support\DatosCliente.class
+com\mycorp\ZendeskException.class
+com\mycorp\Zendesk$Builder.class
+com\mycorp\ZendeskService.class
+com\mycorp\Zendesk.class
+com\mycorp\support\MensajeriaService.class
+com\mycorp\support\DatosEnvioMail.class
+com\mycorp\support\ValueCode.class
+com\mycorp\support\CorreoElectronico.class
+com\mycorp\support\PolizaBasicoFromPolizaBuilder.class
+com\mycorp\support\Ticket.class
+com\mycorp\Zendesk$ZendeskAsyncCompletionHandler.class
+com\mycorp\support\Poliza.class
+com\mycorp\Zendesk$BasicAsyncCompletionHandler.class
+com\mycorp\support\FicheroAdjunto.class
