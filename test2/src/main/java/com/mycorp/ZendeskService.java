@@ -1,5 +1,6 @@
 package com.mycorp;
 
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.List;
@@ -90,27 +91,11 @@ public class ZendeskService {
         ObjectMapper mapper = new ObjectMapper();
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
 
-        StringBuilder datosUsuario = new StringBuilder();
         StringBuilder datosBravo = new StringBuilder();
-
         String idCliente = null;
-
         StringBuilder clientName = new StringBuilder();
-
-
-        // AÃ±ade los datos del formulario
-        if(StringUtils.isNotBlank(usuarioAlta.getNumPoliza())){
-            datosUsuario.append("NÂº de poliza/colectivo: ").append(usuarioAlta.getNumPoliza()).append("/").append(usuarioAlta.getNumDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
-        }else{
-            datosUsuario.append("NÂº tarjeta Sanitas o Identificador: ").append(usuarioAlta.getNumTarjeta()).append(ESCAPED_LINE_SEPARATOR);
-        }
-        datosUsuario.append("Tipo documento: ").append(usuarioAlta.getTipoDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
-        datosUsuario.append("NÂº documento: ").append(usuarioAlta.getNumDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
-        datosUsuario.append("Email personal: ").append(usuarioAlta.getEmail()).append(ESCAPED_LINE_SEPARATOR);
-        datosUsuario.append("NÂº mÃ³vil: ").append(usuarioAlta.getNumeroTelefono()).append(ESCAPED_LINE_SEPARATOR);
-        datosUsuario.append("User Agent: ").append(userAgent).append(ESCAPED_LINE_SEPARATOR);
-
-        datosBravo.append(ESCAPED_LINE_SEPARATOR + "Datos recuperados de BRAVO:" + ESCAPED_LINE_SEPARATOR + ESCAPED_LINE_SEPARATOR);
+        StringBuilder datosUsuario = addDataUser(usuarioAlta, new StringBuilder(), userAgent);
+       
         StringBuilder datosServicio = new StringBuilder();
         // Obtiene el idCliente de la tarjeta
         if(StringUtils.isNotBlank(usuarioAlta.getNumTarjeta())){
@@ -131,13 +116,7 @@ public class ZendeskService {
         else if(StringUtils.isNotBlank(usuarioAlta.getNumPoliza())){
             try
             {
-                Poliza poliza = new Poliza();
-                poliza.setNumPoliza(Integer.valueOf(usuarioAlta.getNumPoliza()));
-                poliza.setNumColectivo(Integer.valueOf(usuarioAlta.getNumDocAcreditativo()));
-                poliza.setCompania(1);
-
-                PolizaBasico polizaBasicoConsulta = new PolizaBasicoFromPolizaBuilder().withPoliza( poliza ).build();
-
+                PolizaBasico polizaBasicoConsulta = new PolizaBasicoFromPolizaBuilder().withPoliza( fillPoliza(usuarioAlta) ).build();
                 final util.datos.DetallePoliza detallePolizaResponse = portalclientesWebEJBRemote.recuperarDatosPoliza(polizaBasicoConsulta);
 
                 clientName.append(detallePolizaResponse.getTomador().getNombre()).
@@ -158,41 +137,7 @@ public class ZendeskService {
         {
             // Obtenemos los datos del cliente
             DatosCliente cliente = restTemplate.getForObject("http://localhost:8080/test-endpoint", DatosCliente.class, idCliente);
-
-            datosBravo.append("TelÃ©fono: ").append(cliente.getGenTGrupoTmk()).append(ESCAPED_LINE_SEPARATOR);
-
-
-            datosBravo.append("Feha de nacimiento: ").append(formatter.format(formatter.parse(cliente.getFechaNacimiento()))).append(ESCAPED_LINE_SEPARATOR);
-
-            List< ValueCode > tiposDocumentos = getTiposDocumentosRegistro();
-            for(int i = 0; i < tiposDocumentos.size();i++)
-            {
-                if(tiposDocumentos.get(i).getCode().equals(cliente.getGenCTipoDocumento().toString()))
-                {
-                    datosBravo.append("Tipo de documento: ").append(tiposDocumentos.get(i).getValue()).append(ESCAPED_LINE_SEPARATOR);
-                }
-            }
-            datosBravo.append("NÃºmero documento: ").append(cliente.getNumeroDocAcred()).append(ESCAPED_LINE_SEPARATOR);
-
-            datosBravo.append("Tipo cliente: ");
-            switch (cliente.getGenTTipoCliente()) {
-            case 1:
-                datosBravo.append("POTENCIAL").append(ESCAPED_LINE_SEPARATOR);
-                break;
-            case 2:
-                datosBravo.append("REAL").append(ESCAPED_LINE_SEPARATOR);
-                break;
-            case 3:
-                datosBravo.append("PROSPECTO").append(ESCAPED_LINE_SEPARATOR);
-                break;
-            }
-
-            datosBravo.append("ID estado del cliente: ").append(cliente.getGenTStatus()).append(ESCAPED_LINE_SEPARATOR);
-
-            datosBravo.append("ID motivo de alta cliente: ").append(cliente.getIdMotivoAlta()).append(ESCAPED_LINE_SEPARATOR);
-
-            datosBravo.append("Registrado: ").append((cliente.getfInactivoWeb() == null ? "SÃ­" : "No")).append(ESCAPED_LINE_SEPARATOR + ESCAPED_LINE_SEPARATOR);
-
+            datosBravo = addDataBravo(new StringBuilder(),cliente);
 
         }catch(Exception e)
         {
@@ -203,7 +148,8 @@ public class ZendeskService {
                 parseJsonBravo(datosServicio));
         ticket = ticket.replaceAll("["+ESCAPED_LINE_SEPARATOR+"]", " ");
 
-        try(Zendesk zendesk = new Zendesk.Builder(URL_ZENDESK).setUsername(ZENDESK_USER).setToken(TOKEN_ZENDESK).build()){
+        try(
+        		Zendesk zendesk = new Zendesk.Builder(URL_ZENDESK).setUsername(ZENDESK_USER).setToken(TOKEN_ZENDESK).build()){
             //Ticket
             Ticket petiZendesk = mapper.readValue(ticket, Ticket.class);
             zendesk.createTicket(petiZendesk);
@@ -211,26 +157,88 @@ public class ZendeskService {
         }catch(Exception e){
             LOG.error("Error al crear ticket ZENDESK", e);
             // Send email
-
-            CorreoElectronico correo = new CorreoElectronico( Long.parseLong(ZENDESK_ERROR_MAIL_FUNCIONALIDAD), "es" )
-                    .addParam(datosUsuario.toString().replaceAll(ESCAPE_ER+ESCAPED_LINE_SEPARATOR, HTML_BR))
-                    .addParam(datosBravo.toString().replaceAll(ESCAPE_ER+ESCAPED_LINE_SEPARATOR, HTML_BR));
-            correo.setEmailA( ZENDESK_ERROR_DESTINATARIO );
             try
             {
-                emailService.enviar( correo );
+                emailService.enviar(sendEmail(datosUsuario, datosBravo) );
             }catch(Exception ex){
                 LOG.error("Error al enviar mail", ex);
             }
-
         }
-
         datosUsuario.append(datosBravo);
 
         return datosUsuario.toString();
     }
 
-    public List< ValueCode > getTiposDocumentosRegistro() {
+    private Poliza fillPoliza(UsuarioAlta usuarioAlta) {
+        Poliza poliza = new Poliza();
+        poliza.setNumPoliza(Integer.valueOf(usuarioAlta.getNumPoliza()));
+        poliza.setNumColectivo(Integer.valueOf(usuarioAlta.getNumDocAcreditativo()));
+        poliza.setCompania(1);
+
+		return poliza;
+	}
+
+	private CorreoElectronico sendEmail(Object datosUsuario, Object datosBravo) {
+    	CorreoElectronico correo = new CorreoElectronico( Long.parseLong(ZENDESK_ERROR_MAIL_FUNCIONALIDAD), "es" )
+                .addParam(datosUsuario.toString().replaceAll(ESCAPE_ER+ESCAPED_LINE_SEPARATOR, HTML_BR))
+                .addParam(datosBravo.toString().replaceAll(ESCAPE_ER+ESCAPED_LINE_SEPARATOR, HTML_BR));
+    	 correo.setEmailA(ZENDESK_ERROR_DESTINATARIO);
+    	 return correo;
+	}
+
+	private StringBuilder addDataBravo(StringBuilder datosBravo, DatosCliente cliente) throws ParseException {
+
+    	datosBravo.append(ESCAPED_LINE_SEPARATOR + "Datos recuperados de BRAVO:" + ESCAPED_LINE_SEPARATOR + ESCAPED_LINE_SEPARATOR);
+        datosBravo.append("TelÃ©fono: ").append(cliente.getGenTGrupoTmk()).append(ESCAPED_LINE_SEPARATOR);
+        datosBravo.append("Feha de nacimiento: ").append(formatter.format(formatter.parse(cliente.getFechaNacimiento()))).append(ESCAPED_LINE_SEPARATOR);
+
+        getTiposDocumentosRegistro().stream()
+        .filter(td->td.getCode().equals(cliente.getGenCTipoDocumento().toString()))
+        .forEach(td->{ datosBravo.append("Tipo de documento: ").append(td.getValue()).append(ESCAPED_LINE_SEPARATOR);});
+        
+        datosBravo.append("NÃºmero documento: ").append(cliente.getNumeroDocAcred()).append(ESCAPED_LINE_SEPARATOR);
+        datosBravo.append("Tipo cliente: ");
+        
+        getCustomerType(cliente.getGenTTipoCliente(), datosBravo);
+ 
+        datosBravo.append("ID estado del cliente: ").append(cliente.getGenTStatus()).append(ESCAPED_LINE_SEPARATOR);
+        datosBravo.append("ID motivo de alta cliente: ").append(cliente.getIdMotivoAlta()).append(ESCAPED_LINE_SEPARATOR);
+        datosBravo.append("Registrado: ").append((cliente.getfInactivoWeb() == null ? "SÃ­" : "No")).append(ESCAPED_LINE_SEPARATOR + ESCAPED_LINE_SEPARATOR);
+		
+        return datosBravo;
+	}
+
+	private StringBuilder getCustomerType(Integer genTTipoCliente, StringBuilder datosBravo) {
+	       switch (genTTipoCliente) {
+	        case 1:
+	            datosBravo.append("POTENCIAL").append(ESCAPED_LINE_SEPARATOR);
+	            break;
+	        case 2:
+	            datosBravo.append("REAL").append(ESCAPED_LINE_SEPARATOR);
+	            break;
+	        case 3:
+	            datosBravo.append("PROSPECTO").append(ESCAPED_LINE_SEPARATOR);
+	            break;
+	        }
+		return datosBravo;
+	}
+
+	private StringBuilder addDataUser(UsuarioAlta usuarioAlta, StringBuilder datosUsuario, String userAgent) {
+        // AÃ±ade los datos del formulario
+        if(StringUtils.isNotBlank(usuarioAlta.getNumPoliza())){
+            datosUsuario.append("NÂº de poliza/colectivo: ").append(usuarioAlta.getNumPoliza()).append("/").append(usuarioAlta.getNumDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
+        }else{
+            datosUsuario.append("NÂº tarjeta Sanitas o Identificador: ").append(usuarioAlta.getNumTarjeta()).append(ESCAPED_LINE_SEPARATOR);
+        }
+        datosUsuario.append("Tipo documento: ").append(usuarioAlta.getTipoDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
+        datosUsuario.append("NÂº documento: ").append(usuarioAlta.getNumDocAcreditativo()).append(ESCAPED_LINE_SEPARATOR);
+        datosUsuario.append("Email personal: ").append(usuarioAlta.getEmail()).append(ESCAPED_LINE_SEPARATOR);
+        datosUsuario.append("NÂº mÃ³vil: ").append(usuarioAlta.getNumeroTelefono()).append(ESCAPED_LINE_SEPARATOR);
+        datosUsuario.append("User Agent: ").append(userAgent).append(ESCAPED_LINE_SEPARATOR);
+		return datosUsuario;
+	}
+
+	public List< ValueCode > getTiposDocumentosRegistro() {
         return Arrays.asList( new ValueCode(), new ValueCode() ); // simulacion servicio externo
     }
 

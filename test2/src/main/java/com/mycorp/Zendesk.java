@@ -6,8 +6,10 @@ import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.ObjectUtils;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,15 +37,92 @@ public class Zendesk implements Closeable {
     private final ObjectMapper mapper;
     private final Logger logger;
     private boolean closed = false;
+    
+    public static class Builder {
+        private AsyncHttpClient client = null;
+        private final String url;
+        private String username = null;
+        private String password = null;
+        private String token = null;
+        private String oauthToken = null;
 
+        public Builder(String url) {
+            this.url = url;
+        }
 
+        public Builder setUsername(String username) {
+            this.username = username;
+            return this;
+        }
+
+        public Builder setPassword(String password) {
+            this.password = password;
+            if (password != null) {
+                this.token = null;
+                this.oauthToken = null;
+            }
+            return this;
+        }
+
+        public Builder setToken(String token) {
+            this.token = token;
+            if (token != null) {
+                this.password = null;
+                this.oauthToken = null;
+            }
+            return this;
+        }
+
+        public Zendesk build() {
+            if (token != null) {
+                return new Zendesk(client, url, username + "/token", token);
+            }
+            return new Zendesk(client, url, username, password);
+        }
+    }
+    
+    public Ticket createTicket(Ticket ticket) {
+        return complete(submit(req("POST", cnst("/tickets.json"),
+                        JSON, json(Collections.singletonMap("ticket", ticket))),
+                handle(Ticket.class, "ticket")));
+    }
+    
+    public static ObjectMapper createMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
+        mapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        return mapper;
+    }
+    
+    //////////////////////////////////////////////////////////////////////
+    // Closeable interface methods
+    //////////////////////////////////////////////////////////////////////
+
+    public boolean isClosed() {
+        return closed || client.isClosed();
+    }
+
+    public void close() {
+        if (closeClient && !client.isClosed()) {
+            client.close();
+        }
+        closed = true;
+    }
+    
+    
+    //////////////////////////////////////////////////////////////////////
+    // Private methods
+    //////////////////////////////////////////////////////////////////////
+    
     private Zendesk(AsyncHttpClient client, String url, String username, String password) {
         this.logger = LoggerFactory.getLogger(Zendesk.class);
         this.closeClient = client == null;
         this.oauthToken = null;
         this.client = client == null ? new AsyncHttpClient() : client;
         this.url = url.endsWith("/") ? url + "api/v2" : url + "/api/v2";
-        if (username != null) {
+        if (StringUtils.isNotBlank(username)) {
             this.realm = new Realm.RealmBuilder()
                     .setScheme(Realm.AuthScheme.BASIC)
                     .setPrincipal(username)
@@ -51,18 +130,12 @@ public class Zendesk implements Closeable {
                     .setUsePreemptiveAuth(true)
                     .build();
         } else {
-            if (password != null) {
+            if (StringUtils.isNotBlank(password)) {
                 throw new IllegalStateException("Cannot specify token or password without specifying username");
             }
             this.realm = null;
         }
         this.mapper = createMapper();
-    }
-
-    public Ticket createTicket(Ticket ticket) {
-        return complete(submit(req("POST", cnst("/tickets.json"),
-                        JSON, json(Collections.singletonMap("ticket", ticket))),
-                handle(Ticket.class, "ticket")));
     }
 
     private byte[] json(Object object) {
@@ -88,15 +161,6 @@ public class Zendesk implements Closeable {
         return builder.build();
     }
 
-    public static ObjectMapper createMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-        mapper.enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        return mapper;
-    }
-
     private Uri cnst(String template) {
         return Uri.create(url + template);
     }
@@ -107,9 +171,9 @@ public class Zendesk implements Closeable {
 
     private <T> ListenableFuture<T> submit(Request request, ZendeskAsyncCompletionHandler<T> handler) {
         if (logger.isDebugEnabled()) {
-            if (request.getStringData() != null) {
+            if (StringUtils.isNotBlank(request.getStringData())) {
                 logger.debug("Request {} {}\n{}", request.getMethod(), request.getUrl(), request.getStringData());
-            } else if (request.getByteData() != null) {
+            } else if (!ObjectUtils.isEmpty(request.getByteData())) {
                 logger.debug("Request {} {} {} {} bytes", request.getMethod(), request.getUrl(),
                         request.getHeaders().getFirstValue("Content-type"), request.getByteData().length);
             } else {
@@ -182,21 +246,6 @@ public class Zendesk implements Closeable {
 
 
     //////////////////////////////////////////////////////////////////////
-    // Closeable interface methods
-    //////////////////////////////////////////////////////////////////////
-
-    public boolean isClosed() {
-        return closed || client.isClosed();
-    }
-
-    public void close() {
-        if (closeClient && !client.isClosed()) {
-            client.close();
-        }
-        closed = true;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // Static helper methods
     //////////////////////////////////////////////////////////////////////
 
@@ -210,49 +259,6 @@ public class Zendesk implements Closeable {
                 throw (ZendeskException) e.getCause();
             }
             throw new ZendeskException(e.getMessage(), e);
-        }
-    }
-
-    public static class Builder {
-        private AsyncHttpClient client = null;
-        private final String url;
-        private String username = null;
-        private String password = null;
-        private String token = null;
-        private String oauthToken = null;
-
-        public Builder(String url) {
-            this.url = url;
-        }
-
-        public Builder setUsername(String username) {
-            this.username = username;
-            return this;
-        }
-
-        public Builder setPassword(String password) {
-            this.password = password;
-            if (password != null) {
-                this.token = null;
-                this.oauthToken = null;
-            }
-            return this;
-        }
-
-        public Builder setToken(String token) {
-            this.token = token;
-            if (token != null) {
-                this.password = null;
-                this.oauthToken = null;
-            }
-            return this;
-        }
-
-        public Zendesk build() {
-            if (token != null) {
-                return new Zendesk(client, url, username + "/token", token);
-            }
-            return new Zendesk(client, url, username, password);
         }
     }
 }

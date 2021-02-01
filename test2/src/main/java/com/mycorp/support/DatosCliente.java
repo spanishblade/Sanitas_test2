@@ -1,7 +1,5 @@
 package com.mycorp.support;
 
-
-
 public class DatosCliente {
     private Long idCliente;
     private Integer genTTipoDocumento;

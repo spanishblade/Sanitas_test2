@@ -3,6 +3,7 @@ package com.mycorp.support;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.ObjectUtils;
 
 public class CorreoElectronico extends DatosEnvioMail {
     /** Contruye un objeto {@link CorreoElectronico} a partir de los parÃ¡metros recibidos. */
@@ -24,7 +25,7 @@ public class CorreoElectronico extends DatosEnvioMail {
      * @param adjunto el adjunto
      */
     public CorreoElectronico addAdjunto( FicheroAdjunto adjunto ) {
-        if ( adjunto != null && adjunto.getContenido() != null && StringUtils.isNotEmpty( adjunto.getNombre() ) ) {
+        if ( !ObjectUtils.isEmpty(adjunto) && !ObjectUtils.isEmpty(adjunto.getContenido()) && StringUtils.isNotEmpty( adjunto.getNombre() ) ) {
             getAdjuntos().add( adjunto );
         }
         return this;

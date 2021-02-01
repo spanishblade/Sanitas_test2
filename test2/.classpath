@@ -37,6 +37,7 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="lib" path="C:/Users/alaguna/Desktop/Sanitas/pruebas-tecnicas/test2/test2/sportalclientesweb-1.19.0.jar"/>
+	<classpathentry kind="lib" path="C:/Users/alaguna/Downloads/jaxb-api-2.4.0-b180830.0359.jar"/>
 	<classpathentry kind="src" output="target/test-classes" path="target/generated-test-sources/test-annotations">
 		<attributes>
 			<attribute name="optional" value="true"/>

@@ -1,5 +1,8 @@
 package com.mycorp.support;
 
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.ObjectUtils;
+
 import util.datos.PolizaBasico;
 
 public class PolizaBasicoFromPolizaBuilder {
@@ -27,12 +30,12 @@ public class PolizaBasicoFromPolizaBuilder {
 
         PolizaBasico polizaBasico = null;
 
-        if( null != poliza ) {
+        if( !ObjectUtils.isEmpty(poliza) ) {
             polizaBasico = new PolizaBasico();
             polizaBasico.setCompania( poliza.getCompania() );
             polizaBasico.setNumPoliza( poliza.getNumPoliza() );
             polizaBasico.setNumColectivo( poliza.getNumColectivo() );
-            if (poliza.getPlanInfo()!= null && poliza.getPlanInfo().getCode()!= null) {
+            if (!ObjectUtils.isEmpty(poliza.getPlanInfo()) && StringUtils.isNotBlank(poliza.getPlanInfo().getCode())) {
                 polizaBasico.setPlan(Integer.valueOf(poliza.getPlanInfo().getCode()));
             }
         }
