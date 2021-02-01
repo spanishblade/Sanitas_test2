@@ -21,8 +21,8 @@
         <version>3.6.1</version>
         <configuration>
           <encoding>${project.build.sourceEncoding}</encoding>
-          <source>1.7</source>
-          <target>1.7</target>
+          <source>1.8</source>
+          <target>1.8</target>
         </configuration>
       </plugin>
 
@@ -65,11 +65,13 @@
       <artifactId>async-http-client</artifactId>
       <version>1.9.31</version>
     </dependency>
-    <!-- <dependency>
+	<dependency>
       <groupId>sanitas.bravo.clientes</groupId>
       <artifactId>sportalclientesweb</artifactId>
       <version>1.19.0</version>
-    </dependency> -->
+      <scope>system</scope>
+      <systemPath>${project.basedir}/sportalclientesweb-1.19.0.jar</systemPath>
+    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
